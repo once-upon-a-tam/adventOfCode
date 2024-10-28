@@ -1,12 +1,14 @@
 package adventOfCode_2023_01
 
 import (
-	_ "embed"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -14,12 +16,23 @@ var (
 	blankString    = regexp.MustCompile(`^$`)
 )
 
-//go:embed input.txt
-var inputFile string
+var Cmd = &cobra.Command{
+  Use: "01",
+  Short: "Day 01 of Advent of Code 2023",
+  Run: func(cmd *cobra.Command, args []string) {
+    execute(cmd.Parent().Name(), cmd.Name())
+  },
+}
 
-func main() {
-	fmt.Printf("Part 01: %d\n", part1(inputFile))
-	fmt.Printf("Part 02: %d\n", part2(inputFile))
+func execute(parent string, command string) {
+  b, err := os.ReadFile(fmt.Sprintf(`cmd/%s/%s/input.txt`, parent, command))
+
+  if err != nil {
+    panic(err)
+  }
+  
+  fmt.Printf("Part 01: %d\n", part1(string(b)))
+	fmt.Printf("Part 02: %d\n", part2(string(b)))
 }
 
 func part1(input string) int64 {
