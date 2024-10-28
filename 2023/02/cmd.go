@@ -26,7 +26,7 @@ var Cmd = &cobra.Command{
 }
 
 func execute(parent string, command string) {
-  b, err := os.ReadFile(fmt.Sprintf(`cmd/%s/%s/input.txt`, parent, command))
+  b, err := os.ReadFile(fmt.Sprintf(`%s/%s/input.txt`, parent, command))
 
   if err != nil {
     panic(err)

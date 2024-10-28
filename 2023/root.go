@@ -1,10 +1,10 @@
 package adventOfCode_2023
 
 import (
-	adventOfCode_2023_01 "adventOfCode/cmd/2023/01"
-	adventOfCode_2023_02 "adventOfCode/cmd/2023/02"
-	adventOfCode_2023_03 "adventOfCode/cmd/2023/03"
-	adventOfCode_2023_04 "adventOfCode/cmd/2023/04"
+	adventOfCode_2023_01 "adventOfCode/2023/01"
+	adventOfCode_2023_02 "adventOfCode/2023/02"
+	adventOfCode_2023_03 "adventOfCode/2023/03"
+	adventOfCode_2023_04 "adventOfCode/2023/04"
 	"fmt"
 	"os"
 
