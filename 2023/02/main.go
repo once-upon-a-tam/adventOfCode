@@ -1,4 +1,4 @@
-package main
+package adventOfCode_2023_02
 
 import (
 	_ "embed"
