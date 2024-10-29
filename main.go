@@ -1,6 +1,7 @@
 package main
 
 import (
+	adventOfCode_template "adventOfCode/template"
 	adventOfCode_2023 "adventOfCode/2023"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+  rootCmd.AddCommand(adventOfCode_template.Cmd)
   rootCmd.AddCommand(adventOfCode_2023.Cmd)
 }
 

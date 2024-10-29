@@ -1,16 +1,15 @@
-package adventOfCode_2023_XX
+package adventOfCode_{{.Year}}_{{.Day}}
 
 import (
-	_ "embed"
-	"fmt"
-	"os"
+  "fmt"
+  "os"
 
-	"github.com/spf13/cobra"
+  "github.com/spf13/cobra"
 )
 
 var Cmd = &cobra.Command{
-  Use: "XX",
-  Short: "Day XX of Advent of Code 2023",
+  Use: "{{.Day}}",
+  Short: "Day {{.Day}} of Advent of Code 2023",
   Run: func(cmd *cobra.Command, args []string) {
     execute(cmd.Parent().Name(), cmd.Name())
   },
