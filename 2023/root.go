@@ -5,6 +5,7 @@ import (
 	adventOfCode_2023_02 "adventOfCode/2023/02"
 	adventOfCode_2023_03 "adventOfCode/2023/03"
 	adventOfCode_2023_04 "adventOfCode/2023/04"
+	adventOfCode_2023_05 "adventOfCode/2023/05"
 	"fmt"
 	"os"
 
@@ -22,6 +23,7 @@ func init() {
   Cmd.AddCommand(adventOfCode_2023_02.Cmd)
   Cmd.AddCommand(adventOfCode_2023_03.Cmd)
   Cmd.AddCommand(adventOfCode_2023_04.Cmd)
+  Cmd.AddCommand(adventOfCode_2023_05.Cmd)
 }
 
 func Execute() {
