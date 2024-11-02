@@ -3,9 +3,9 @@ package adventOfCode_2023_05
 import (
 	"adventOfCode/helpers"
 	"fmt"
+	"math"
 	"os"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -34,37 +34,43 @@ var (
 	blankLineRegexp = regexp.MustCompile(`^$`)
 )
 
+type Range struct {
+	start int
+	end   int
+}
+
 func part1(input string) int64 {
-	maps, err := almanacMapsFromInput(input)
+	chunks := strings.Split(input, "\n\n")
+	seedsLine, _ := strings.CutPrefix(chunks[0], "seeds:")
+
+	seeds, err := helpers.IntsFromString(seedsLine, " ")
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 
-  chunks := strings.Split(input, "\n\n")
-	seedsRangesList, err := helpers.IntsFromString(strings.TrimPrefix(chunks[0], "seeds:"), " ")
-	if err != nil {
-		fmt.Println(err)
-		return 0
+	var converted, todo []int
+	converted = seeds
+	for _, chunk := range chunks[1:] {
+		conversionStrings := strings.Split(chunk, "\n")[1:]
+		todo = append(todo, converted...)
+		converted = nil
+
+		for _, conversionStr := range conversionStrings {
+			targetRange, delta, err := ParseConversionRule(conversionStr)
+			if err != nil {
+				panic(err)
+			}
+			var newConverted []int
+			newConverted, todo = convert(todo, targetRange, delta)
+			converted = append(converted, newConverted...)
+		}
 	}
 
-	// To match with part 2, we use a list of intervals of range 1.
-	seedRanges := make([]interval, 0)
-	for _, seed := range seedsRangesList {
-		seedRanges = append(seedRanges, interval{start: seed, end: seed})
-	}
-
-	sort.Slice(seedRanges, func(i, j int) bool {
-		return seedRanges[i].start < seedRanges[j].start
-	})
-
-	minLocation := 0
-	for _, seed := range seedRanges {
-		location := findSeedRangeLocation(seed, maps)
-
-		if minLocation == 0 {
-			minLocation = location.start
-		} else if minLocation > location.start {
-			minLocation = location.start
+	minLocation := math.MaxInt64
+	all := append(converted, todo...)
+	for _, location := range all {
+		if location < minLocation {
+			minLocation = location
 		}
 	}
 
@@ -72,45 +78,59 @@ func part1(input string) int64 {
 }
 
 func part2(input string) int64 {
-	maps, err := almanacMapsFromInput(input)
-	if err != nil {
-		fmt.Println(err)
-	}
-
 	chunks := strings.Split(input, "\n\n")
-	seedsRangesList, err := helpers.IntsFromString(strings.TrimPrefix(chunks[0], "seeds:"), " ")
+
+	// Parse the seeds line's values into ranges of seeds
+	seedsLine, _ := strings.CutPrefix(chunks[0], "seeds:")
+	seedValues, err := helpers.IntsFromString(seedsLine, " ")
 	if err != nil {
-		fmt.Println(err)
-		return 0
+		panic(err)
 	}
 
-	seedRanges := make([]interval, 0)
-	for i := 0; i < len(seedsRangesList); i += 2 {
-		seedRanges = append(
-			seedRanges,
-			interval{
-				start: seedsRangesList[i],
-				end:   seedsRangesList[i] + seedsRangesList[i+1],
+	var seedsRanges []Range
+	for i := 0; i < len(seedValues); i += 2 {
+		seedsRanges = append(
+			seedsRanges,
+			Range{
+				start: seedValues[i],
+				end:   seedValues[i] + seedValues[i+1],
 			},
 		)
 	}
 
-	sort.Slice(seedRanges, func(i, j int) bool {
-		return seedRanges[i].start < seedRanges[j].start
-	})
+	// We initialize the "converted" range slice with the seed range, then we
+	// iterate over each section of the file (chunks[1:], as the first chunk is
+	// the seeds range declaration)
+	//
+	// Each line of each section describes the conversion rule.
+	// We iterate over the conversion rules, and convert the current range (todos)
+	// using the convertRanges function, which either
+	//    - applies the conversion to the part of the range that overlaps it,
+	//    - appends the part that doesn't overlap to the "todos" slice
+	//
+	// We then end up with a list of location ranges
+	var converted, todos []Range
+	converted = seedsRanges
+	for _, chunk := range chunks[1:] {
+		conversionStrings := strings.Split(chunk, "\n")[1:]
+		todos = append(todos, converted...)
+		converted = nil
 
-	for _, currMap := range maps {
-		currMap.sortRanges()
-		currMap.fillGapsInRanges()
+		for _, conversionStr := range conversionStrings {
+			targetRange, delta, err := ParseConversionRule(conversionStr)
+			if err != nil {
+				panic(err)
+			}
+			var newConverted []Range
+			newConverted, todos = convertRanges(todos, targetRange, delta)
+			converted = append(converted, newConverted...)
+		}
 	}
 
-	minLocation := 0
-	for _, seedRange := range seedRanges {
-		location := findSeedRangeLocation(seedRange, maps)
-
-		if minLocation == 0 {
-			minLocation = location.start
-		} else if minLocation > location.start {
+	minLocation := math.MaxInt64
+	all := append(converted, todos...)
+	for _, location := range all {
+		if location.start < minLocation {
 			minLocation = location.start
 		}
 	}
@@ -118,154 +138,123 @@ func part2(input string) int64 {
 	return int64(minLocation)
 }
 
-func findSeedRangeLocation(seeds interval, maps []almanacMap) interval {
-	v := seeds
-
-Maps:
-	for _, mapping := range maps {
-		for _, mapRange := range mapping.ranges {
-			if v.start >= mapRange.match.start && v.end < mapRange.match.end {
-				v.start = v.start + mapRange.offset
-				v.end = v.end + mapRange.offset
-				continue Maps
-			}
-		}
+// ParseConversionRule parses a mapping rule into its target range and delta information.
+func ParseConversionRule(s string) (targetRange Range, delta int, err error) {
+	if blankLineRegexp.MatchString(s) {
+		return Range{}, 0, nil
 	}
-
-	return v
-}
-
-type interval struct {
-	start int // inclusive
-	end   int // exclusive
-}
-
-var (
-	categories = [...]string{
-		"seed",
-		"soil",
-		"fertilizer",
-		"water",
-		"light",
-		"temperature",
-		"humidity",
-		"location",
-	}
-)
-
-type almanacMap struct {
-	sourceCategory      string
-	destinationCategory string
-	ranges              []almanacRange
-}
-
-type almanacRange struct {
-	match  interval
-	offset int
-}
-
-func (m almanacMap) sortRanges() {
-	sort.Slice(m.ranges, func(i, j int) bool {
-		return m.ranges[i].match.start < m.ranges[j].match.start
-	})
-}
-
-func (m *almanacMap) fillGapsInRanges() {
-	updatedRanges := make([]almanacRange, 0)
-
-	for _, currRange := range m.ranges {
-		switch {
-		case len(updatedRanges) == 0 && currRange.match.start != 0:
-			updatedRanges = append(updatedRanges, almanacRange{
-				match: interval{
-					start: 0,
-					end:   currRange.match.start,
-				},
-				offset: 0,
-			})
-		case len(updatedRanges) > 0 && currRange.match.start != updatedRanges[len(updatedRanges)-1].match.end:
-			updatedRanges = append(updatedRanges, almanacRange{
-				match: interval{
-					start: updatedRanges[len(updatedRanges)-1].match.end,
-					end:   currRange.match.start,
-				},
-				offset: 0,
-			})
-		}
-
-		updatedRanges = append(updatedRanges, currRange)
-	}
-
-	m.ranges = updatedRanges
-}
-
-func almanacMapsFromInput(input string) ([]almanacMap, error) {
-	chunks := strings.Split(input, "\n\n")
-
-	if len(chunks) != len(categories) {
-		return nil, fmt.Errorf("Expected %d categories, received %d", len(categories), len(chunks))
-	}
-
-	maps := make([]almanacMap, 0)
-	for _, chunk := range chunks[1:] {
-		parsed, err := almanacMapFromString(strings.Split(chunk, "\n"))
-		if err != nil {
-			return nil, err
-		}
-		maps = append(maps, parsed)
-	}
-
-	return maps, nil
-}
-
-func almanacMapFromString(s []string) (almanacMap, error) {
-	if len(s) < 2 {
-		return almanacMap{}, fmt.Errorf("invalid input: expected at least 2 lines, got %d", len(s))
-	}
-
-	source, destination, err := categoriesFromMapHeader(s[0])
+	values, err := helpers.IntsFromString(s, " ")
 	if err != nil {
-		return almanacMap{}, fmt.Errorf("could not parse map header: %w", err)
+		return Range{}, 0, err
 	}
 
-	var ranges []almanacRange
-	for _, line := range s[1:] {
-		if blankLineRegexp.MatchString(line) {
+	if len(values) != 3 {
+		return Range{}, 0, fmt.Errorf("invalid input: expected 3 numbers, got %d", len(values))
+	}
+
+	targetRange = Range{
+		start: values[1],
+		end:   values[1] + values[2] - 1,
+	}
+
+	delta = values[0] - values[1]
+
+	return
+}
+
+// convert converts a slice of elements using a targetRange and a delta.
+// If an element from the "elements" slice is within the "targetRange" range,
+// we apply the "delta" value to it and append the result to "converted"
+// If it doesn't, we append the initial value to "todos"
+func convert(elements []int, targetRange Range, delta int) (converted []int, todo []int) {
+	for _, element := range elements {
+		if targetRange.start <= element && element <= targetRange.end {
+			converted = append(converted, element+delta)
+		} else {
+			todo = append(todo, element)
+		}
+	}
+
+	return
+}
+
+// convertRanges applies a conversion logic to the overlapping part of elements
+// the range of conversionRule, and appends the rest of elements to the todos slice.
+//
+// If elements is fully overlapping with the conversionRule's range:
+//    - converted is appended with the converted version of elements
+//    - todos is untouched
+//
+// If elements doesn't overlap with the conversionRule's range:
+//    - converted is untouched
+//    - todos is appended with elements
+//
+// If elements partially overlaps with the conversionRule's range:
+//    - converted is appended with the converted version of the overlapping part of elements
+//    - todos is appended with the non-overlapping part of elements.
+
+func convertRanges(elements []Range, targetRange Range, delta int) (converted []Range, todos []Range) {
+	for _, element := range elements {
+		if element.start > targetRange.end || element.end < targetRange.start {
+			todos = append(todos, element)
 			continue
 		}
-		values, err := helpers.IntsFromString(line, " ")
-		if err != nil {
-			return almanacMap{}, err
+
+		// Fully overlapping
+		if element.start >= targetRange.start && element.end <= targetRange.end {
+			converted = append(
+				converted,
+				Range{
+					start: element.start + delta,
+					end:   element.end + delta,
+				},
+			)
+			continue
 		}
 
-		if len(values) != 3 {
-			return almanacMap{}, fmt.Errorf("invalid input: expected 3 numbers, got %d", len(values))
+		// E     ------
+		// C   -----
+		// Partial overlapping with excess on the right
+		if element.start <= targetRange.end && element.end > targetRange.end {
+			todoRange := Range{
+				start: targetRange.end + 1,
+				end:   element.end,
+			}
+
+			convertedRange := Range{
+				start: element.start + delta,
+				end:   targetRange.end + delta,
+			}
+			// fmt.Printf("Partial overlapping, excess on right\t")
+			// fmt.Printf("Converted: %d, todos: %d\n", Range{element.start,conversionRule.end}, todoRange)
+
+			todos = append(todos, todoRange)
+			converted = append(converted, convertedRange)
+
+			continue
 		}
 
-		destStart := values[0]
-		srcStart := values[1]
-		length := values[2]
+		// E   -----
+		// C     ------
+		// Partial overlapping with excess on the left
+		if element.start < targetRange.start && element.end >= targetRange.start {
+			todoRange := Range{
+				start: element.start,
+				end:   targetRange.start - 1,
+			}
 
-		ranges = append(
-			ranges,
-			almanacRange{
-				match:  interval{start: srcStart, end: srcStart + length},
-				offset: destStart - srcStart,
-			})
+			convertedRange := Range{
+				start: targetRange.start + delta,
+				end:   element.end + delta,
+			}
+			// fmt.Printf("Partial overlapping, excess on left\t")
+			// fmt.Printf("Converted: %d, todos: %d\n", Range{conversionRule.start + conversionRule.delta, element.end + conversionRule.delta}, todoRange)
+
+			todos = append(todos, todoRange)
+			converted = append(converted, convertedRange)
+
+			continue
+		}
 	}
-
-	return almanacMap{
-		sourceCategory:      source,
-		destinationCategory: destination,
-		ranges:              ranges,
-	}, nil
-}
-
-func categoriesFromMapHeader(s string) (string, string, error) {
-	s = strings.TrimSuffix(s, " map:")
-	parts := strings.Split(s, "-to-")
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid input: expected 2 parts, got %d", len(parts))
-	}
-	return parts[0], parts[1], nil
+	return
 }
